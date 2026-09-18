@@ -37,6 +37,9 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, MatchLineup> $lineups
  * @property-read Collection<int, MatchGoal> $goals
  * @property-read Collection<int, Article> $articles
+ * @property-read int $attending_count
+ * @property-read int $absent_count
+ * @property-read int $pending_count
  */
 #[Fillable([
     'title',

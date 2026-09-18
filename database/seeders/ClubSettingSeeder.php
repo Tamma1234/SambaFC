@@ -14,6 +14,7 @@ class ClubSettingSeeder extends Seeder
             [
                 'name' => 'Samba FC',
                 'logo_path' => 'images/logo.png',
+                'cover_image_path' => 'images/banner-sambafc.jpg',
                 'description' => 'Câu lạc bộ bóng đá Samba FC — cùng nhau ra sân, gắn kết và phát triển.',
                 'founded_year' => '2020',
                 'home_venue' => 'Sân bóng Samba',

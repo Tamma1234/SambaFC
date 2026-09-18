@@ -3,13 +3,16 @@
 namespace App\Support;
 
 use App\Enums\AttendanceStatus;
+use App\Enums\ExpenseCategory;
 use App\Enums\FundStatus;
 use App\Enums\MatchStatus;
 use App\Enums\MemberRole;
 use App\Enums\MemberStatus;
 use App\Enums\PitchSlot;
 use App\Models\FundContribution;
+use App\Models\FundExpense;
 use App\Models\GameMatch;
+use App\Models\KitPurchase;
 use App\Models\MatchGoal;
 use App\Models\MatchLineup;
 use App\Models\Member;
@@ -174,6 +177,17 @@ final class ClubAdminPresenter
     }
 
     /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    public static function fundAmounts(): array
+    {
+        return array_map(fn (int $amount): array => [
+            'value' => (string) $amount,
+            'label' => number_format($amount, 0, ',', '.').' đ',
+        ], FundContribution::AMOUNTS);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function lineup(MatchLineup $lineup): array
@@ -286,13 +300,18 @@ final class ClubAdminPresenter
                 /** @var FundContribution $first */
                 $first = $rows->first();
                 $ordered = $rows
-                    ->sortBy(fn (FundContribution $contribution): string => $contribution->member?->displayName() ?? '')
+                    ->sortBy([
+                        fn (FundContribution $contribution): int => $contribution->member?->jersey_number ?? PHP_INT_MAX,
+                        fn (FundContribution $contribution): string => mb_strtolower($contribution->member?->displayName() ?? ''),
+                    ])
                     ->values();
 
                 return [
                     'group_key' => $first->group_key,
                     'title' => $first->title ?: 'Quỹ đội',
                     'amount' => $first->amount,
+                    'amount_min' => (int) $rows->min('amount'),
+                    'amount_max' => (int) $rows->max('amount'),
                     'paid_count' => $rows->where('status', FundStatus::Paid)->count(),
                     'unpaid_count' => $rows->where('status', FundStatus::Unpaid)->count(),
                     'contributions' => self::funds($ordered),
@@ -303,15 +322,140 @@ final class ClubAdminPresenter
     }
 
     /**
-     * @return array{paid_total: int, unpaid_total: int, paid_count: int, unpaid_count: int}
+     * @return array{
+     *     paid_total: int,
+     *     unpaid_total: int,
+     *     paid_count: int,
+     *     unpaid_count: int,
+     *     expense_total: int,
+     *     expense_count: int,
+     *     expense_this_month: int,
+     *     balance: int
+     * }
      */
     public static function fundSummary(): array
     {
+        $paidTotal = (int) FundContribution::query()->where('status', FundStatus::Paid)->sum('amount');
+        $expenseTotal = (int) FundExpense::query()->sum('amount');
+
         return [
-            'paid_total' => (int) FundContribution::query()->where('status', FundStatus::Paid)->sum('amount'),
+            'paid_total' => $paidTotal,
             'unpaid_total' => (int) FundContribution::query()->where('status', FundStatus::Unpaid)->sum('amount'),
             'paid_count' => FundContribution::query()->where('status', FundStatus::Paid)->count(),
             'unpaid_count' => FundContribution::query()->where('status', FundStatus::Unpaid)->count(),
+            'expense_total' => $expenseTotal,
+            'expense_count' => FundExpense::query()->count(),
+            'expense_this_month' => (int) FundExpense::query()
+                ->whereYear('spent_at', now()->year)
+                ->whereMonth('spent_at', now()->month)
+                ->sum('amount'),
+            'balance' => $paidTotal - $expenseTotal,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function expense(FundExpense $expense): array
+    {
+        return [
+            'id' => $expense->id,
+            'title' => $expense->title,
+            'category' => $expense->category->value,
+            'category_label' => $expense->category->label(),
+            'amount' => $expense->amount,
+            'spent_at' => $expense->spent_at->toDateString(),
+            'note' => $expense->note,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, FundExpense>  $expenses
+     * @return array<int, array<string, mixed>>
+     */
+    public static function expenses(Collection $expenses): array
+    {
+        return $expenses->map(fn (FundExpense $expense): array => self::expense($expense))->all();
+    }
+
+    /**
+     * @param  Collection<int, FundExpense>  $expenses
+     * @return array<int, array<string, mixed>>
+     */
+    public static function expenseGroups(Collection $expenses): array
+    {
+        return $expenses
+            ->groupBy(fn (FundExpense $expense): string => $expense->spent_at->format('Y-m'))
+            ->sortKeysDesc()
+            ->map(function (Collection $rows, string $monthKey): array {
+                /** @var FundExpense $first */
+                $first = $rows->first();
+                $ordered = $rows
+                    ->sortByDesc(fn (FundExpense $expense): string => $expense->spent_at->toDateString().'-'.$expense->id)
+                    ->values();
+
+                return [
+                    'month_key' => $monthKey,
+                    'month_label' => 'Tháng '.$first->spent_at->month.'/'.$first->spent_at->year,
+                    'total' => (int) $rows->sum('amount'),
+                    'expenses' => self::expenses($ordered),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    public static function expenseCategories(): array
+    {
+        return self::enumOptions(ExpenseCategory::cases());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function kitPurchase(KitPurchase $purchase): array
+    {
+        return [
+            'id' => $purchase->id,
+            'member_id' => $purchase->member_id,
+            'member_name' => $purchase->member?->displayName(),
+            'amount' => $purchase->amount,
+            'status' => $purchase->status->value,
+            'status_label' => $purchase->status->label(),
+            'paid_at' => $purchase->paid_at?->toIso8601String(),
+            'note' => $purchase->note,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, KitPurchase>  $purchases
+     * @return array<int, array<string, mixed>>
+     */
+    public static function kitPurchases(Collection $purchases): array
+    {
+        return $purchases
+            ->sortBy([
+                fn (KitPurchase $purchase): int => $purchase->member?->jersey_number ?? PHP_INT_MAX,
+                fn (KitPurchase $purchase): string => mb_strtolower($purchase->member?->displayName() ?? ''),
+            ])
+            ->values()
+            ->map(fn (KitPurchase $purchase): array => self::kitPurchase($purchase))
+            ->all();
+    }
+
+    /**
+     * @return array{paid_total: int, unpaid_total: int, paid_count: int, unpaid_count: int}
+     */
+    public static function kitSummary(): array
+    {
+        return [
+            'paid_total' => (int) KitPurchase::query()->where('status', FundStatus::Paid)->sum('amount'),
+            'unpaid_total' => (int) KitPurchase::query()->where('status', FundStatus::Unpaid)->sum('amount'),
+            'paid_count' => KitPurchase::query()->where('status', FundStatus::Paid)->count(),
+            'unpaid_count' => KitPurchase::query()->where('status', FundStatus::Unpaid)->count(),
         ];
     }
 

@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Club\AttendanceController;
+use App\Http\Controllers\Club\ExpenseController;
 use App\Http\Controllers\Club\FundController;
+use App\Http\Controllers\Club\KitPurchaseController;
 use App\Http\Controllers\Club\MatchController;
 use App\Http\Controllers\Club\MemberController;
 use App\Http\Controllers\ClubPageController;
@@ -39,6 +41,11 @@ Route::prefix('{current_team}')
             Route::resource('funds', FundController::class)
                 ->parameters(['funds' => 'fundContribution'])
                 ->except(['show', 'create', 'edit']);
+            Route::resource('expenses', ExpenseController::class)
+                ->parameters(['expenses' => 'fundExpense'])
+                ->except(['show', 'create', 'edit']);
+            Route::get('kits', [KitPurchaseController::class, 'index'])->name('kits.index');
+            Route::put('kits/{kitPurchase}', [KitPurchaseController::class, 'update'])->name('kits.update');
 
             Route::get('attendances', [AttendanceController::class, 'index'])->name('attendances.index');
             Route::get('attendances/{gameMatch}', [AttendanceController::class, 'edit'])->name('attendances.edit');

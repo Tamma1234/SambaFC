@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Club;
 
+use App\Models\FundContribution;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreFundRequest extends FormRequest
 {
@@ -14,7 +16,7 @@ class StoreFundRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
-            'amount' => ['required', 'integer', 'min:0'],
+            'amount' => ['required', 'integer', Rule::in(FundContribution::AMOUNTS)],
             'note' => ['nullable', 'string', 'max:2000'],
         ];
     }

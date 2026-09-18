@@ -5,7 +5,9 @@ namespace Tests\Feature\Club;
 use App\Enums\AttendanceStatus;
 use App\Enums\MatchStatus;
 use App\Models\FundContribution;
+use App\Models\FundExpense;
 use App\Models\GameMatch;
+use App\Models\KitPurchase;
 use App\Models\Member;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -275,13 +277,14 @@ class ClubManagementTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('club/funds/index')
                 ->has('groups', 0)
+                ->has('amounts', 3)
                 ->where('summary.paid_total', 0)
                 ->where('summary.unpaid_total', 0));
 
         $this->actingAs($user)
             ->post(route('club.funds.store'), [
                 'title' => 'Quỹ tháng 9',
-                'amount' => 150000,
+                'amount' => 300000,
             ])
             ->assertRedirect();
 
@@ -289,7 +292,7 @@ class ClubManagementTest extends TestCase
         $this->assertDatabaseHas('fund_contributions', [
             'member_id' => $first->id,
             'title' => 'Quỹ tháng 9',
-            'amount' => 150000,
+            'amount' => 300000,
             'status' => 'unpaid',
         ]);
         $this->assertDatabaseHas('fund_contributions', [
@@ -315,9 +318,188 @@ class ClubManagementTest extends TestCase
         ]);
 
         $this->actingAs($user)
+            ->put(route('club.funds.update', ['fundContribution' => $contribution]), [
+                'amount' => 500000,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('fund_contributions', [
+            'id' => $contribution->id,
+            'amount' => 500000,
+            'status' => 'paid',
+        ]);
+
+        $this->actingAs($user)
             ->delete(route('club.funds.destroy', ['fundContribution' => $contribution]))
             ->assertRedirect();
 
         $this->assertSoftDeleted($contribution);
+    }
+
+    public function test_new_active_members_are_added_to_existing_funds(): void
+    {
+        $user = User::factory()->create();
+        Member::factory()->create(['name' => 'Player One']);
+        Member::factory()->create(['name' => 'Player Two']);
+
+        $this->actingAs($user)
+            ->post(route('club.funds.store'), [
+                'title' => 'Quỹ tháng 9',
+                'amount' => 300000,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseCount('fund_contributions', 2);
+
+        $this->actingAs($user)
+            ->post(route('club.members.store'), [
+                'name' => 'Player Three',
+                'status' => 'active',
+                'role' => 'player',
+            ])
+            ->assertRedirect();
+
+        $third = Member::query()->where('name', 'Player Three')->firstOrFail();
+
+        $this->assertDatabaseCount('fund_contributions', 3);
+        $this->assertDatabaseHas('fund_contributions', [
+            'member_id' => $third->id,
+            'title' => 'Quỹ tháng 9',
+            'amount' => 300000,
+            'status' => 'unpaid',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('club.funds.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('club/funds/index')
+                ->has('groups', 1)
+                ->has('groups.0.contributions', 3));
+
+        Member::factory()->create(['name' => 'Player Four']);
+
+        $this->actingAs($user)
+            ->get(route('club.funds.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('groups.0.contributions', 4));
+
+        $this->assertDatabaseHas('fund_contributions', [
+            'member_id' => Member::query()->where('name', 'Player Four')->value('id'),
+            'title' => 'Quỹ tháng 9',
+            'status' => 'unpaid',
+        ]);
+    }
+
+    public function test_kit_purchases_are_listed_and_can_be_updated(): void
+    {
+        $user = User::factory()->create();
+        $first = Member::factory()->create(['name' => 'Player One']);
+        Member::factory()->create(['name' => 'Player Two']);
+        Member::factory()->inactive()->create(['name' => 'Inactive']);
+
+        $this->actingAs($user)
+            ->get(route('club.kits.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('club/kits/index')
+                ->has('purchases', 2)
+                ->where('amount', 200000)
+                ->where('title', 'Quần áo bóng đá')
+                ->where('summary.unpaid_count', 2)
+                ->where('summary.paid_count', 0));
+
+        $this->assertDatabaseMissing('kit_purchases', [
+            'member_id' => Member::query()->where('name', 'Inactive')->value('id'),
+        ]);
+
+        $purchase = KitPurchase::query()->where('member_id', $first->id)->firstOrFail();
+
+        $this->actingAs($user)
+            ->put(route('club.kits.update', ['kitPurchase' => $purchase]), [
+                'status' => 'paid',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('kit_purchases', [
+            'id' => $purchase->id,
+            'status' => 'paid',
+            'amount' => 200000,
+        ]);
+
+        $this->actingAs($user)
+            ->post(route('club.members.store'), [
+                'name' => 'Player Three',
+                'status' => 'active',
+                'role' => 'player',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseCount('kit_purchases', 3);
+        $this->assertDatabaseHas('kit_purchases', [
+            'member_id' => Member::query()->where('name', 'Player Three')->value('id'),
+            'amount' => 200000,
+            'status' => 'unpaid',
+        ]);
+    }
+
+    public function test_fund_expenses_can_be_managed(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->get(route('club.expenses.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('club/expenses/index')
+                ->has('groups', 0)
+                ->where('summary.expense_total', 0)
+                ->where('summary.balance', 0));
+
+        $this->actingAs($user)
+            ->post(route('club.expenses.store'), [
+                'title' => 'Tiền sân tháng 9',
+                'category' => 'pitch',
+                'amount' => 1500000,
+                'spent_at' => now()->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $expense = FundExpense::query()->firstOrFail();
+
+        $this->assertSame('Tiền sân tháng 9', $expense->title);
+        $this->assertSame(1500000, $expense->amount);
+
+        $this->actingAs($user)
+            ->put(route('club.expenses.update', ['fundExpense' => $expense]), [
+                'title' => 'Mua bóng',
+                'category' => 'ball',
+                'amount' => 400000,
+                'spent_at' => now()->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('fund_expenses', [
+            'id' => $expense->id,
+            'title' => 'Mua bóng',
+            'category' => 'ball',
+            'amount' => 400000,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('club.expenses.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('groups', 1)
+                ->has('groups.0.expenses', 1)
+                ->where('summary.expense_total', 400000)
+                ->where('summary.expense_this_month', 400000));
+
+        $this->actingAs($user)
+            ->delete(route('club.expenses.destroy', ['fundExpense' => $expense]))
+            ->assertRedirect();
+
+        $this->assertSoftDeleted($expense);
     }
 }

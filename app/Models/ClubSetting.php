@@ -36,6 +36,7 @@ class ClubSetting extends Model
         return static::query()->firstOrCreate([], [
             'name' => 'Samba FC',
             'logo_path' => 'images/logo.png',
+            'cover_image_path' => 'images/banner-sambafc.jpg',
             'description' => 'Câu lạc bộ bóng đá Samba FC',
         ]);
     }
@@ -45,9 +46,9 @@ class ClubSetting extends Model
         return $this->publicUrl($this->logo_path) ?? asset('images/logo.png');
     }
 
-    public function coverUrl(): ?string
+    public function coverUrl(): string
     {
-        return $this->publicUrl($this->cover_image_path);
+        return $this->publicUrl($this->cover_image_path) ?? asset('images/banner-sambafc.jpg');
     }
 
     private function publicUrl(?string $path): ?string

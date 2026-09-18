@@ -41,6 +41,8 @@ class MemberController extends Controller
 
         $member = Member::query()->create($data);
         $member->attachToUpcomingMatches();
+        $member->attachToOpenFunds();
+        $member->attachToKitPurchases();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã thêm thành viên.']);
 
@@ -58,6 +60,8 @@ class MemberController extends Controller
 
         $member->update($data);
         $member->attachToUpcomingMatches();
+        $member->attachToOpenFunds();
+        $member->attachToKitPurchases();
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã cập nhật thành viên.']);
 

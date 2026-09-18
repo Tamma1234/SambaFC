@@ -29,6 +29,25 @@ export function formatVnd(amount: number): string {
     return `${new Intl.NumberFormat('vi-VN').format(amount)} đ`;
 }
 
+export function formatDate(iso: string): string {
+    const date = iso.includes('T')
+        ? new Date(iso)
+        : new Date(`${iso}T00:00:00`);
+
+    return new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    }).format(date);
+}
+
+export function todayInput(): string {
+    const date = new Date();
+    const pad = (value: number): string => String(value).padStart(2, '0');
+
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function formatRating(
     rating: number | string | null | undefined,
 ): string {

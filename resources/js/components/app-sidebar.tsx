@@ -4,6 +4,8 @@ import {
     ClipboardCheck,
     Home,
     LayoutGrid,
+    Receipt,
+    ShoppingBag,
     Users,
     Wallet,
 } from 'lucide-react';
@@ -23,7 +25,9 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard, home } from '@/routes';
 import { index as attendancesIndex } from '@/routes/club/attendances';
+import { index as expensesIndex } from '@/routes/club/expenses';
 import { index as fundsIndex } from '@/routes/club/funds';
+import { index as kitsIndex } from '@/routes/club/kits';
 import { index as matchesIndex } from '@/routes/club/matches';
 import { index as membersIndex } from '@/routes/club/members';
 import type { NavItem } from '@/types';
@@ -59,6 +63,16 @@ export function AppSidebar() {
                   title: 'Quỹ đội',
                   href: fundsIndex(slug),
                   icon: Wallet,
+              },
+              {
+                  title: 'Chi tiêu',
+                  href: expensesIndex(slug),
+                  icon: Receipt,
+              },
+              {
+                  title: 'Mua đồ',
+                  href: kitsIndex(slug),
+                  icon: ShoppingBag,
               },
           ]
         : [

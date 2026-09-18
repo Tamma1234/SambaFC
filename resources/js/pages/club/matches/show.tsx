@@ -210,6 +210,25 @@ export default function MatchShow({
 
     const starters = slots.filter((slot) => slot.is_starter);
     const substitutes = slots.filter((slot) => !slot.is_starter);
+    const selectedMemberIds = useMemo(
+        () =>
+            new Set(
+                Object.values(lineupDrafts)
+                    .map((draft) => draft.member_id)
+                    .filter(Boolean),
+            ),
+        [lineupDrafts],
+    );
+
+    const membersForSlot = (slotValue: string): ClubMember[] => {
+        const currentId = lineupDrafts[slotValue]?.member_id ?? '';
+
+        return members.filter((member) => {
+            const id = String(member.id);
+
+            return id === currentId || !selectedMemberIds.has(id);
+        });
+    };
 
     const pitchPlayers = useMemo(
         () =>
@@ -415,7 +434,7 @@ export default function MatchShow({
                                             rating: '',
                                         }
                                     }
-                                    members={members}
+                                    members={membersForSlot(slot.value)}
                                     onChange={assignSlot}
                                 />
                             ))}
@@ -439,7 +458,7 @@ export default function MatchShow({
                                             rating: '',
                                         }
                                     }
-                                    members={members}
+                                    members={membersForSlot(slot.value)}
                                     onChange={assignSlot}
                                     roomy
                                 />

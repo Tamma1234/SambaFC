@@ -19,6 +19,8 @@ class FundController extends Controller
 {
     public function index(): Response
     {
+        Member::syncActiveMembersIntoFunds();
+
         $contributions = FundContribution::query()
             ->with('member')
             ->latest()
@@ -27,6 +29,7 @@ class FundController extends Controller
         return Inertia::render('club/funds/index', [
             'groups' => ClubAdminPresenter::fundGroups($contributions),
             'statuses' => ClubAdminPresenter::fundStatuses(),
+            'amounts' => ClubAdminPresenter::fundAmounts(),
             'summary' => ClubAdminPresenter::fundSummary(),
         ]);
     }
@@ -70,22 +73,30 @@ class FundController extends Controller
     public function update(UpdateFundRequest $request, string $current_team, FundContribution $fundContribution): RedirectResponse
     {
         $data = $request->validated();
-        $status = FundStatus::from($data['status']);
 
-        $payload = [
-            'status' => $status,
-            'paid_at' => $status->isPaid()
+        $payload = [];
+
+        if (isset($data['status'])) {
+            $status = FundStatus::from($data['status']);
+            $payload['status'] = $status;
+            $payload['paid_at'] = $status->isPaid()
                 ? ($fundContribution->paid_at ?? now())
-                : null,
-        ];
+                : null;
+        }
+
+        if (array_key_exists('amount', $data)) {
+            $payload['amount'] = $data['amount'];
+        }
 
         if (array_key_exists('note', $data)) {
             $payload['note'] = $data['note'];
         }
 
-        $fundContribution->update($payload);
+        if ($payload !== []) {
+            $fundContribution->update($payload);
+        }
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã cập nhật trạng thái đóng quỹ.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Đã cập nhật đóng quỹ.']);
 
         return back();
     }

@@ -7,7 +7,7 @@
     <link rel="icon" href="{{ asset('images/logo.png') }}">
     <link rel="stylesheet" href="{{ asset('css/club.css') }}">
 </head>
-<body class="club-body">
+<body class="club-body @hasSection('banner') has-banner @endif">
 <div class="club-wrap">
     <header class="club-header">
         <div class="club-header-inner">
@@ -24,14 +24,20 @@
                     @if (auth()->user()->currentTeam)
                         <a class="login-link" href="{{ route('dashboard', auth()->user()->currentTeam) }}">{{ auth()->user()->name }}</a>
                     @else
-                        <a class="login-link" href="{{ route('login') }}">Tài khoản</a>
+                        <a class="login-link" href="{{ route('login') }}">{{ auth()->user()->name }}</a>
                     @endif
+                    <form method="POST" action="{{ route('logout') }}" class="logout-form">
+                        @csrf
+                        <button type="submit">Đăng xuất</button>
+                    </form>
                 @else
                     <a class="login-link" href="{{ route('login') }}">Đăng nhập</a>
                 @endauth
             </nav>
         </div>
     </header>
+
+    @yield('banner')
 
     <main class="club-main">
         @yield('content')
@@ -41,7 +47,7 @@
         <div class="club-footer-inner">
             <div class="club-footer-grid">
                 <div>
-                    <a class="club-brand" href="{{ route('home') }}">
+                    <a class="footer-brand" href="{{ route('home') }}">
                         <img src="{{ $club->logoUrl() }}" alt="{{ $club->name }}">
                         <span>{{ $club->name }}</span>
                     </a>

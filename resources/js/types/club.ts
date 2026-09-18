@@ -147,6 +147,8 @@ export type ClubFundGroup = {
     group_key: string | null;
     title: string;
     amount: number;
+    amount_min: number;
+    amount_max: number;
     paid_count: number;
     unpaid_count: number;
     contributions: ClubFundContribution[];
@@ -157,4 +159,36 @@ export type ClubFundSummary = {
     unpaid_total: number;
     paid_count: number;
     unpaid_count: number;
+    expense_total: number;
+    expense_count: number;
+    expense_this_month: number;
+    balance: number;
+};
+
+export type ClubExpense = {
+    id: number;
+    title: string;
+    category: string;
+    category_label: string;
+    amount: number;
+    spent_at: string;
+    note: string | null;
+};
+
+export type ClubExpenseGroup = {
+    month_key: string;
+    month_label: string;
+    total: number;
+    expenses: ClubExpense[];
+};
+
+export type ClubKitPurchase = {
+    id: number;
+    member_id: number;
+    member_name: string | null;
+    amount: number;
+    status: string;
+    status_label: string;
+    paid_at: string | null;
+    note: string | null;
 };

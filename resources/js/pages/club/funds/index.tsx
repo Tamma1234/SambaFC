@@ -1,10 +1,13 @@
-import { Form, Head, router, usePage } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import ClubPage from '@/components/club-page';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import NativeSelect from '@/components/native-select';
+import PaymentStatusFilter, {
+    type PaymentStatusFilter as StatusFilter,
+} from '@/components/payment-status-filter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -28,6 +31,7 @@ import {
     update,
 } from '@/routes/club/funds';
 import { destroy as destroyGroup } from '@/routes/club/funds/groups';
+import { index as expensesIndex } from '@/routes/club/expenses';
 import type {
     ClubFundContribution,
     ClubFundGroup,
@@ -38,20 +42,50 @@ import type {
 type Props = {
     groups: ClubFundGroup[];
     statuses: ClubOption[];
+    amounts: ClubOption[];
     summary: ClubFundSummary;
 };
 
-export default function FundsIndex({ groups, statuses, summary }: Props) {
+function groupAmountLabel(group: ClubFundGroup): string {
+    if (group.amount_min === group.amount_max) {
+        return `${formatVnd(group.amount_min)} / người`;
+    }
+
+    return `${formatVnd(group.amount_min)} – ${formatVnd(group.amount_max)} / người`;
+}
+
+function amountChoices(amounts: ClubOption[], current: number): ClubOption[] {
+    const value = String(current);
+
+    if (amounts.some((option) => option.value === value)) {
+        return amounts;
+    }
+
+    return [...amounts, { value, label: formatVnd(current) }].sort(
+        (first, second) => Number(first.value) - Number(second.value),
+    );
+}
+
+export default function FundsIndex({
+    groups,
+    statuses,
+    amounts,
+    summary,
+}: Props) {
     const slug = usePage().props.currentTeam?.slug ?? '';
     const [creating, setCreating] = useState(false);
     const [savingId, setSavingId] = useState<number | null>(null);
     const [pendingStatuses, setPendingStatuses] = useState<
         Record<number, string>
     >({});
+    const [pendingAmounts, setPendingAmounts] = useState<
+        Record<number, number>
+    >({});
     const [deleting, setDeleting] = useState<ClubFundContribution | null>(null);
     const [deletingGroup, setDeletingGroup] = useState<ClubFundGroup | null>(
         null,
     );
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
     const saveStatus = (row: ClubFundContribution, status: string) => {
         if (status === (pendingStatuses[row.id] ?? row.status)) {
@@ -79,23 +113,68 @@ export default function FundsIndex({ groups, statuses, summary }: Props) {
         });
     };
 
+    const saveAmount = (row: ClubFundContribution, amount: number) => {
+        if (amount === (pendingAmounts[row.id] ?? row.amount)) {
+            return;
+        }
+
+        setPendingAmounts((current) => ({
+            ...current,
+            [row.id]: amount,
+        }));
+
+        router.visit(update([slug, row.id]), {
+            data: { amount },
+            preserveScroll: true,
+            onStart: () => setSavingId(row.id),
+            onFinish: () => {
+                setSavingId(null);
+                setPendingAmounts((current) => {
+                    const next = { ...current };
+                    delete next[row.id];
+
+                    return next;
+                });
+            },
+        });
+    };
+
+    const visibleGroups = groups
+        .map((group) => ({
+            ...group,
+            contributions: group.contributions.filter((row) => {
+                if (statusFilter === 'all') {
+                    return true;
+                }
+
+                return (pendingStatuses[row.id] ?? row.status) === statusFilter;
+            }),
+        }))
+        .filter((group) => group.contributions.length > 0);
+
     return (
         <ClubPage>
             <Head title="Quỹ đội" />
 
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <Heading
                     variant="small"
                     title="Quỹ đội"
                     description="Mỗi khoản quỹ áp dụng cho toàn đội. Đánh dấu từng người đã đóng hoặc chưa đóng."
                 />
-                <Button onClick={() => setCreating(true)}>
-                    <Plus />
-                    Thêm quỹ
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <PaymentStatusFilter
+                        value={statusFilter}
+                        onChange={setStatusFilter}
+                    />
+                    <Button onClick={() => setCreating(true)}>
+                        <Plus />
+                        Thêm quỹ
+                    </Button>
+                </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-sm font-medium">
@@ -126,15 +205,55 @@ export default function FundsIndex({ groups, statuses, summary }: Props) {
                         </p>
                     </CardContent>
                 </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-sm font-medium">
+                            Đã chi
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-semibold">
+                            {formatVnd(summary.expense_total)}
+                        </div>
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            {summary.expense_count} khoản · tháng này{' '}
+                            {formatVnd(summary.expense_this_month)}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-sm font-medium">
+                            Còn lại
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-semibold">
+                            {formatVnd(summary.balance)}
+                        </div>
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            <Link
+                                href={expensesIndex(slug)}
+                                className="hover:underline"
+                            >
+                                Xem chi tiêu
+                            </Link>
+                        </p>
+                    </CardContent>
+                </Card>
             </div>
 
             {groups.length === 0 ? (
                 <p className="text-muted-foreground rounded-xl border py-10 text-center">
                     Chưa có quỹ. Thêm quỹ để toàn đội cùng đóng.
                 </p>
+            ) : visibleGroups.length === 0 ? (
+                <p className="text-muted-foreground rounded-xl border py-10 text-center">
+                    Không có thành viên với trạng thái này.
+                </p>
             ) : (
                 <div className="space-y-6">
-                    {groups.map((group) => (
+                    {visibleGroups.map((group) => (
                         <section
                             key={group.group_key ?? group.title}
                             className="overflow-hidden rounded-xl border"
@@ -145,7 +264,7 @@ export default function FundsIndex({ groups, statuses, summary }: Props) {
                                         {group.title}
                                     </h2>
                                     <p className="text-muted-foreground text-sm">
-                                        {formatVnd(group.amount)} / người ·{' '}
+                                        {groupAmountLabel(group)} ·{' '}
                                         {group.paid_count} đã đóng ·{' '}
                                         {group.unpaid_count} chưa đóng
                                     </p>
@@ -184,6 +303,9 @@ export default function FundsIndex({ groups, statuses, summary }: Props) {
                                         const currentStatus =
                                             pendingStatuses[row.id] ??
                                             row.status;
+                                        const currentAmount =
+                                            pendingAmounts[row.id] ??
+                                            row.amount;
 
                                         return (
                                             <tr
@@ -196,8 +318,42 @@ export default function FundsIndex({ groups, statuses, summary }: Props) {
                                                 <td className="px-4 py-3 font-medium">
                                                     {row.member_name ?? '—'}
                                                 </td>
-                                                <td className="px-4 py-3 font-medium">
-                                                    {formatVnd(row.amount)}
+                                                <td className="px-4 py-3">
+                                                    <NativeSelect
+                                                        aria-label={`Số tiền của ${row.member_name ?? 'thành viên'}`}
+                                                        value={String(
+                                                            currentAmount,
+                                                        )}
+                                                        disabled={
+                                                            savingId === row.id
+                                                        }
+                                                        onChange={(event) =>
+                                                            saveAmount(
+                                                                row,
+                                                                Number(
+                                                                    event.target
+                                                                        .value,
+                                                                ),
+                                                            )
+                                                        }
+                                                        className="w-auto min-w-32"
+                                                    >
+                                                        {amountChoices(
+                                                            amounts,
+                                                            currentAmount,
+                                                        ).map((option) => (
+                                                            <option
+                                                                key={
+                                                                    option.value
+                                                                }
+                                                                value={
+                                                                    option.value
+                                                                }
+                                                            >
+                                                                {option.label}
+                                                            </option>
+                                                        ))}
+                                                    </NativeSelect>
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <NativeSelect
@@ -268,6 +424,7 @@ export default function FundsIndex({ groups, statuses, summary }: Props) {
                 open={creating}
                 onOpenChange={setCreating}
                 slug={slug}
+                amounts={amounts}
             />
 
             <Dialog
@@ -374,10 +531,12 @@ function CreateFundDialog({
     open,
     onOpenChange,
     slug,
+    amounts,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     slug: string;
+    amounts: ClubOption[];
 }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -393,8 +552,10 @@ function CreateFundDialog({
                             <DialogHeader>
                                 <DialogTitle>Thêm quỹ</DialogTitle>
                                 <DialogDescription>
-                                    Tất cả thành viên đang hoạt động sẽ được
-                                    thêm vào quỹ này với trạng thái chưa đóng.
+                                    Tất cả thành viên đang hoạt động được thêm
+                                    vào quỹ với số tiền mặc định. Sau đó có thể
+                                    đổi từng người: 300.000, 400.000 hoặc
+                                    500.000 đ.
                                 </DialogDescription>
                             </DialogHeader>
 
@@ -411,15 +572,25 @@ function CreateFundDialog({
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="amount">
-                                        Số tiền mỗi người (đ)
+                                        Số tiền mặc định mỗi người
                                     </Label>
-                                    <Input
+                                    <NativeSelect
                                         id="amount"
                                         name="amount"
-                                        type="number"
-                                        min={0}
                                         required
-                                    />
+                                        defaultValue={
+                                            amounts[0]?.value ?? '300000'
+                                        }
+                                    >
+                                        {amounts.map((option) => (
+                                            <option
+                                                key={option.value}
+                                                value={option.value}
+                                            >
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </NativeSelect>
                                     <InputError message={errors.amount} />
                                 </div>
                                 <div className="grid gap-2">

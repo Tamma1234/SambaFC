@@ -32,6 +32,11 @@ class FundContribution extends Model
     use HasFactory, SoftDeletes;
 
     /**
+     * @var array<int, int>
+     */
+    public const AMOUNTS = [300000, 400000, 500000];
+
+    /**
      * @return BelongsTo<Member, $this>
      */
     public function member(): BelongsTo

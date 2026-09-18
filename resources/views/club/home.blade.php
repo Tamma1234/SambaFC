@@ -2,42 +2,29 @@
 
 @section('title', 'Trang chủ')
 
-@section('content')
-    @php
-        $cover = $club->coverUrl();
-    @endphp
-
-    <section class="hero {{ $cover ? 'has-cover' : '' }}" @if($cover) style="background-image: linear-gradient(180deg, rgba(11,18,32,.25), rgba(11,18,32,.78)), url('{{ $cover }}');" @endif>
-        <div>
-            <img class="hero-logo" src="{{ $club->logoUrl() }}" alt="{{ $club->name }}">
-            <div style="color:#7dffa3; font-weight:700; letter-spacing:2px; font-size:13px;">CÂU LẠC BỘ BÓNG ĐÁ</div>
-            <h1>{{ $club->name }}</h1>
-            <p>{{ $club->description ?: 'Quản lý thành viên, tin tức, trận đấu và thống kê của đội.' }}</p>
-            @if ($club->home_venue)
-                <p style="margin-top:8px;">Sân nhà: {{ $club->home_venue }}</p>
-            @endif
-        </div>
+@section('banner')
+    <section class="page-banner">
+        <img src="{{ $club->coverUrl() }}" alt="{{ $club->name }}">
     </section>
+@endsection
 
+@section('content')
     <section class="section">
         <div class="section-head">
-            <h2>Trận đấu tiếp theo</h2>
+            <h2>Trận đấu</h2>
             <a href="{{ route('stats.index') }}">Xem thống kê</a>
         </div>
-        @if ($nextMatch)
-            <div class="card">
-                <div class="badge">Sắp diễn ra</div>
-                <h3 class="match-title">{{ $nextMatch['title'] }}</h3>
-                <div class="match-meta">
-                    {{ \Illuminate\Support\Carbon::parse($nextMatch['kickoff_at'])->timezone(config('app.timezone'))->format('H:i d/m/Y') }}
-                    @if ($nextMatch['venue'])
-                        · {{ $nextMatch['venue'] }}
-                    @endif
-                    · {{ $nextMatch['is_home'] ? 'Sân nhà' : 'Sân khách' }}
-                </div>
+        @if ($latestResult || $nextMatch)
+            <div class="match-grid">
+                @if ($latestResult)
+                    @include('club.partials.match-card', ['match' => $latestResult, 'heading' => 'Kết quả gần nhất'])
+                @endif
+                @if ($nextMatch)
+                    @include('club.partials.match-card', ['match' => $nextMatch, 'heading' => 'Trận tiếp theo'])
+                @endif
             </div>
         @else
-            <div class="empty">Chưa có trận đấu sắp tới. Khi thêm lịch thi đấu, thông tin sẽ hiện ở đây.</div>
+            <div class="empty">Chưa có trận đấu. Khi thêm lịch thi đấu, thông tin sẽ hiện ở đây.</div>
         @endif
     </section>
 
@@ -74,8 +61,12 @@
             @include('club.partials.player-list', ['players' => $topPlayers, 'unit' => 'trận', 'empty' => 'Chưa có dữ liệu tham gia trận trong tháng này.'])
         </div>
         <div>
+            <div class="section-head"><h2>Top 5 ghi bàn tháng</h2></div>
+            @include('club.partials.player-list', ['players' => $topScorers, 'unit' => 'bàn', 'empty' => 'Chưa có bàn thắng trong tháng này.'])
+        </div>
+        <div>
             <div class="section-head"><h2>Top 5 MVP</h2></div>
-            @include('club.partials.player-list', ['players' => $topMvps, 'unit' => 'MVP', 'empty' => 'Chưa có cầu thủ được chọn MVP.'])
+            @include('club.partials.player-list', ['players' => $topMvps, 'unit' => 'điểm', 'empty' => 'Chưa có điểm trận đấu.'])
         </div>
     </section>
 @endsection
